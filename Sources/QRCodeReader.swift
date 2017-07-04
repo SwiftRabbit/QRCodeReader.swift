@@ -29,14 +29,16 @@ import AVFoundation
 
 /// Reader object base on the `AVCaptureDevice` to read / scan 1D and 2D codes.
 public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegate {
-  var defaultDevice: AVCaptureDevice = .defaultDevice(withMediaType: AVMediaTypeVideo)
+  var defaultDevice: AVCaptureDevice = AVCaptureDevice.default(for: AVMediaType.video)!
+    
+    // .defaultDevice(withMediaType: AVMediaType.video)
   var frontDevice: AVCaptureDevice?  = {
     if #available(iOS 10, *) {
-      return AVCaptureDevice.defaultDevice(withDeviceType: .builtInWideAngleCamera, mediaType: AVMediaTypeVideo, position: .front)
+      return AVCaptureDevice.default(AVCaptureDevice.DeviceType.builtInWideAngleCamera, for: AVMediaType.video, position: .front)
     }
     else {
-      for device in AVCaptureDevice.devices(withMediaType: AVMediaTypeVideo) {
-        if let _device = device as? AVCaptureDevice , _device.position == AVCaptureDevicePosition.front {
+      for device in AVCaptureDevice.devices(for: AVMediaType.video) {
+        if let _device = device as? AVCaptureDevice , _device.position == AVCaptureDevice.Position.front {
           return _device
         }
       }
@@ -68,7 +70,7 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
   }()
 
   /// An array of strings identifying the types of metadata objects to process.
-  public let metadataObjectTypes: [String]
+  public let metadataObjectTypes: [AVMetadataObject.ObjectType]
 
   // MARK: - Managing the Code Discovery
 
@@ -79,7 +81,7 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
   public var didFindCode: ((QRCodeReaderResult) -> Void)?
 
   /// Block is executed when a found metadata object string could not be decoded.
-  public var didFailDecoding: ((Void) -> Void)?
+  public var didFailDecoding: (() -> Void)?
 
   // MARK: - Creating the Code Reade
 
@@ -87,7 +89,7 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
    Initializes the code reader with the QRCode metadata type object.
    */
   public convenience override init() {
-    self.init(metadataObjectTypes: [AVMetadataObjectTypeQRCode], captureDevicePosition: .back)
+    self.init(metadataObjectTypes: [AVMetadataObject.ObjectType.qr], captureDevicePosition: .back)
   }
 
   /**
@@ -95,7 +97,7 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
 
    - parameter metadataObjectTypes: An array of strings identifying the types of metadata objects to process.
    */
-  public convenience init(metadataObjectTypes types: [String]) {
+  public convenience init(metadataObjectTypes types: [AVMetadataObject.ObjectType]) {
     self.init(metadataObjectTypes: types, captureDevicePosition: .back)
   }
 
@@ -104,8 +106,8 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
 
    - parameter captureDevicePosition: The capture position to use on start of scanning
    */
-  public convenience init(captureDevicePosition position: AVCaptureDevicePosition) {
-    self.init(metadataObjectTypes: [AVMetadataObjectTypeQRCode], captureDevicePosition: position)
+  public convenience init(captureDevicePosition position: AVCaptureDevice.Position) {
+    self.init(metadataObjectTypes: [AVMetadataObject.ObjectType.qr], captureDevicePosition: position)
   }
 
   /**
@@ -114,7 +116,7 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
    - parameter metadataObjectTypes: An array of strings identifying the types of metadata objects to process.
    - parameter captureDevicePosition: The Camera to use on start of scanning.
    */
-  public init(metadataObjectTypes types: [String], captureDevicePosition: AVCaptureDevicePosition) {
+  public init(metadataObjectTypes types: [AVMetadataObject.ObjectType], captureDevicePosition: AVCaptureDevice.Position) {
     metadataObjectTypes = types
 
     super.init()
@@ -124,7 +126,7 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
 
   // MARK: - Initializing the AV Components
 
-  private func configureDefaultComponents(withCaptureDevicePosition: AVCaptureDevicePosition) {
+  private func configureDefaultComponents(withCaptureDevicePosition: AVCaptureDevice.Position) {
     session.addOutput(metadataOutput)
 
     switch withCaptureDevicePosition {
@@ -137,11 +139,10 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
         session.addInput(_defaultDeviceInput)
       }
     }
-
-
+    
     metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
     metadataOutput.metadataObjectTypes = metadataObjectTypes
-    previewLayer.videoGravity          = AVLayerVideoGravityResizeAspectFill
+    previewLayer.videoGravity          = AVLayerVideoGravity.resizeAspectFill
   }
 
   /// Switch between the back and the front camera.
@@ -154,7 +155,7 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
         session.removeInput(_currentInput)
 
         let newDeviceInput = (_currentInput.device.position == .front) ? defaultDeviceInput : _frontDeviceInput
-        session.addInput(newDeviceInput)
+        session.addInput(newDeviceInput!)
       }
 
       session.commitConfiguration()
@@ -219,7 +220,7 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
       try defaultDevice.lockForConfiguration()
 
       let current             = defaultDevice.torchMode
-      defaultDevice.torchMode = AVCaptureTorchMode.on == current ? .off : .on
+      defaultDevice.torchMode = AVCaptureDevice.TorchMode.on == current ? .off : .on
 
       defaultDevice.unlockForConfiguration()
     }
@@ -294,9 +295,9 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
    - returns: A boolean value that indicates whether the reader is available.
    */
   public class func isAvailable() -> Bool {
-    let captureDevice = AVCaptureDevice.defaultDevice(withMediaType: AVMediaTypeVideo)
-
-    return (try? AVCaptureDeviceInput(device: captureDevice)) != nil
+    let captureDevice = AVCaptureDevice.default(for: AVMediaType.video)
+    
+    return (try? AVCaptureDeviceInput(device: captureDevice!)) != nil
   }
 
   /**
@@ -306,10 +307,10 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
 
    - returns: A boolean value that indicates whether the device supports the given metadata object types.
    */
-  public class func supportsMetadataObjectTypes(_ metadataTypes: [String]? = nil) throws -> Bool {
-    let captureDevice = AVCaptureDevice.defaultDevice(withMediaType: AVMediaTypeVideo)
+  public class func supportsMetadataObjectTypes(_ metadataTypes: [AVMetadataObject.ObjectType]? = nil) throws -> Bool {
+    let captureDevice = AVCaptureDevice.default(for: AVMediaType.video)
 
-    let deviceInput = try AVCaptureDeviceInput(device: captureDevice)
+    let deviceInput = try AVCaptureDeviceInput(device: captureDevice!)
 
     let output  = AVCaptureMetadataOutput()
     let session = AVCaptureSession()
@@ -321,11 +322,11 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
 
     if metadataObjectTypes == nil || metadataObjectTypes?.count == 0 {
       // Check the QRCode metadata object type by default
-      metadataObjectTypes = [AVMetadataObjectTypeQRCode]
+      metadataObjectTypes = [AVMetadataObject.ObjectType.qr]
     }
 
     for metadataObjectType in metadataObjectTypes! {
-      if !output.availableMetadataObjectTypes.contains(where: { $0 as! String == metadataObjectType }) {
+      if !output.availableMetadataObjectTypes.contains(where: { $0 == metadataObjectType }) {
         return false
       }
     }
@@ -335,7 +336,7 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
 
   // MARK: - AVCaptureMetadataOutputObjects Delegate Methods
 
-  public func captureOutput(_ captureOutput: AVCaptureOutput!, didOutputMetadataObjects metadataObjects: [Any]!, from connection: AVCaptureConnection!) {
+  public func metadataOutput(_ captureOutput: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
     for current in metadataObjects {
       if let _readableCodeObject = current as? AVMetadataMachineReadableCodeObject {
         if _readableCodeObject.stringValue != nil {
@@ -345,7 +346,7 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
                 stopScanning()
               }
 
-              let scannedResult = QRCodeReaderResult(value: sVal, metadataType:_readableCodeObject.type)
+              let scannedResult = QRCodeReaderResult(value: sVal, metadataType:_readableCodeObject.type.rawValue)
 
               DispatchQueue.main.async(execute: { [weak self] in
                 self?.didFindCode?(scannedResult)
